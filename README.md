@@ -174,7 +174,7 @@ The Myntra Sales Analytics Dashboard demonstrates the power of Python and AI in 
 
 ```bash
 # Step 1: Clone the Repository
-git clone https://github.com/yourusername/myntra-sales-dashboard.git
+git clone https://github.com/mohitmishra45/myntra-sales-dashboard.git
 
 # Step 2: Navigate to Project Directory
 cd myntra-sales-dashboard
