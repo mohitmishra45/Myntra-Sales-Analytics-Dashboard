@@ -4,7 +4,7 @@
 This project is a comprehensive Data Science solution that uses Python and Streamlit to analyze sales data from Myntra, a leading e-commerce platform. It transforms raw sales data into an interactive dashboard with rich visualizations, AI-powered insights, and a real-time Gemini-based chat assistant.
 
 The dashboard helps stakeholders:
-- Understand sales trends and customer behavio
+- Understand sales trends and customer behavior
 - Evaluate product, brand, and category performance
 - Make data-driven decisions using AI recommendations
 
