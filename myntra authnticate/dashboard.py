@@ -578,7 +578,7 @@ with st.sidebar:
 def load_data():
     try:
         # Use data watcher to get latest data
-        data = pd.read_csv(r"C:\Users\mohit\Desktop\Myntra_dataset.csv")
+        data = pd.read_csv(r"C:\Users\mohit\Downloads\Myntra_dataset_large.csv")
         if data is None:
             st.error("Failed to load data from the file. Please check if the file exists and is accessible.")
             return None
