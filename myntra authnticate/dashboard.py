@@ -20,6 +20,7 @@ from scipy import stats
 import calendar
 import google.generativeai as genai
 from auth import check_auth, logout
+from data_watcher import setup_data_watcher, check_data_updates
 
 class SalesAnalyzer:
     def __init__(self):
@@ -390,14 +391,14 @@ class SalesAnalyzer:
 
 # Set page configuration with optimized settings
 st.set_page_config(
-    page_title="Myntra Sales Analytics Dashboard",
+    page_title="Myntra Sales Analytics Pro",
     layout="wide",
     initial_sidebar_state="expanded",
     page_icon="👕",
     menu_items={
         'Get Help': 'https://www.myntra.com/contact',
         'Report a bug': "https://www.myntra.com/contact",
-        'About': "# Myntra Sales Analytics Dashboard\nA comprehensive analytics dashboard for Myntra sales data."
+        'About': "# Myntra Sales Analytics Pro\nA comprehensive analytics dashboard for Myntra sales data."
     }
 )
 
@@ -572,13 +573,20 @@ with st.sidebar:
     if st.button("Logout"):
         logout()
 
+# Set up data watcher for real-time updates
+EXCEL_PATH = r"C:\Users\mohit\Downloads\Myntra_dataset_large.csv"
+data_watcher = setup_data_watcher(EXCEL_PATH)
+
+# Check for data updates
+check_data_updates()
 
 # Optimize data loading with better caching and error handling
 @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
 def load_data():
     try:
         # Use data watcher to get latest data
-        data = pd.read_csv(r"C:\Users\mohit\Downloads\Myntra_dataset_large.csv")
+        data = data_watcher.get_latest_data()
+        
         if data is None:
             st.error("Failed to load data from the file. Please check if the file exists and is accessible.")
             return None
@@ -1560,109 +1568,175 @@ if show_trends:
 # Add Evolutionary Data Analysis section before AI Sales Analysis
 st.markdown('<h2 class="section-header">📊 Evolutionary Data Analysis</h2>', unsafe_allow_html=True)
 
-# Calculate average monthly sales
-monthly_avg = filtered_df.groupby(filtered_df['Date'].dt.strftime('%B'))['Discounted Price'].mean().reindex(
-    [calendar.month_name[i] for i in range(1, 13)]
-)
-
-# Calculate average yearly sales
-yearly_avg = filtered_df.groupby(filtered_df['Date'].dt.year)['Discounted Price'].mean()
-
-# Create tabs for different analyses
-evo_tab1, evo_tab2 = st.tabs(["📈 Average Monthly Sales", "🔄 Average Yearly Sales"])
+# Create tabs for different evolutionary analyses
+evo_tab1, evo_tab2, evo_tab3 = st.tabs(["📈 Growth Trends", "🔄 Seasonal Patterns", "📊 Performance Evolution"])
 
 with evo_tab1:
-    st.subheader("Average Monthly Sales Analysis")
+    st.subheader("Growth Trends Analysis")
     
-    # Create monthly average sales visualization
-    fig_monthly_avg = go.Figure()
+    # Calculate monthly growth rates
+    monthly_data = filtered_df.groupby(filtered_df['Date'].dt.to_period('M')).agg({
+        'Discounted Price': 'sum',
+        'Ratings': 'mean',
+        'Discount%': 'mean'
+    }).reset_index()
     
-    fig_monthly_avg.add_trace(go.Bar(
-        x=monthly_avg.index,
-        y=monthly_avg.values,
-        marker_color='#FF3F6C'
+    monthly_data['Date'] = monthly_data['Date'].astype(str)
+    monthly_data['Growth_Rate'] = monthly_data['Discounted Price'].pct_change() * 100
+    
+    # Create growth trend visualization
+    fig_growth = go.Figure()
+    
+    fig_growth.add_trace(go.Scatter(
+        x=monthly_data['Date'],
+        y=monthly_data['Growth_Rate'],
+        mode='lines+markers',
+        name='Growth Rate',
+        line=dict(color='#FF3F6C', width=2),
+        marker=dict(size=8)
     ))
     
-    fig_monthly_avg.update_layout(
-        title="Average Monthly Sales Distribution",
+    fig_growth.update_layout(
+        title="Monthly Sales Growth Rate",
         xaxis_title="Month",
-        yaxis_title="Average Sales (₹)",
+        yaxis_title="Growth Rate (%)",
         template="plotly_white",
-        height=500,
-        showlegend=False,
-        xaxis=dict(tickangle=45)
+        height=400,
+        showlegend=True
     )
     
-    st.plotly_chart(fig_monthly_avg, use_container_width=True)
+    st.plotly_chart(fig_growth, use_container_width=True)
     
-    # Display monthly insights
+    # Display key growth metrics
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.metric("Highest Average Month", 
-                 f"{monthly_avg.idxmax()}", 
-                 f"₹{monthly_avg.max():,.2f}")
+        avg_growth = monthly_data['Growth_Rate'].mean()
+        st.metric("Average Monthly Growth", f"{avg_growth:.1f}%")
     
     with col2:
-        st.metric("Lowest Average Month", 
-                 f"{monthly_avg.idxmin()}", 
-                 f"₹{monthly_avg.min():,.2f}")
+        max_growth = monthly_data['Growth_Rate'].max()
+        st.metric("Highest Growth Month", f"{max_growth:.1f}%")
     
     with col3:
-        st.metric("Overall Monthly Average", 
-                 f"₹{monthly_avg.mean():,.2f}")
+        min_growth = monthly_data['Growth_Rate'].min()
+        st.metric("Lowest Growth Month", f"{min_growth:.1f}%")
 
 with evo_tab2:
-    st.subheader("Average Yearly Sales Analysis")
+    st.subheader("Seasonal Pattern Analysis")
     
-    # Create yearly average sales visualization
-    fig_yearly_avg = go.Figure()
+    # Calculate seasonal metrics
+    filtered_df['Month'] = filtered_df['Date'].dt.month
+    seasonal_data = filtered_df.groupby('Month').agg({
+        'Discounted Price': ['sum', 'mean', 'count'],
+        'Ratings': 'mean',
+        'Discount%': 'mean'
+    }).round(2)
     
-    fig_yearly_avg.add_trace(go.Bar(
-        x=yearly_avg.index,
-        y=yearly_avg.values,
+    # Flatten column names
+    seasonal_data.columns = ['Total_Sales', 'Avg_Sale', 'Order_Count', 'Avg_Rating', 'Avg_Discount']
+    
+    # Create seasonal pattern visualization
+    fig_seasonal = go.Figure()
+    
+    fig_seasonal.add_trace(go.Bar(
+        x=seasonal_data.index,
+        y=seasonal_data['Total_Sales'],
+        name='Total Sales',
         marker_color='#FF3F6C'
     ))
     
-    fig_yearly_avg.update_layout(
-        title="Average Yearly Sales Distribution",
-        xaxis_title="Year",
-        yaxis_title="Average Sales (₹)",
+    fig_seasonal.update_layout(
+        title="Monthly Sales Distribution",
+        xaxis_title="Month",
+        yaxis_title="Total Sales (₹)",
         template="plotly_white",
-        height=500,
-        showlegend=False
+        height=400,
+        showlegend=True
     )
     
-    st.plotly_chart(fig_yearly_avg, use_container_width=True)
+    st.plotly_chart(fig_seasonal, use_container_width=True)
     
-    # Display yearly insights
-    col1, col2, col3 = st.columns(3)
+    # Display seasonal insights
+    st.markdown("""
+        ### Seasonal Insights
+        1. Peak Sales Months: {}
+        2. Off-Peak Months: {}
+        3. Best Discount Months: {}
+    """.format(
+        ', '.join([calendar.month_name[m] for m in seasonal_data.nlargest(3, 'Total_Sales').index]),
+        ', '.join([calendar.month_name[m] for m in seasonal_data.nsmallest(3, 'Total_Sales').index]),
+        ', '.join([calendar.month_name[m] for m in seasonal_data.nlargest(3, 'Avg_Discount').index])
+    ))
+
+with evo_tab3:
+    st.subheader("Performance Evolution")
+    
+    # Calculate performance metrics over time
+    performance_data = filtered_df.groupby(filtered_df['Date'].dt.to_period('M')).agg({
+        'Discounted Price': ['sum', 'mean'],
+        'Ratings': 'mean',
+        'Discount%': 'mean'
+    }).round(2)
+    
+    # Flatten column names
+    performance_data.columns = ['Total_Sales', 'Avg_Sale', 'Avg_Rating', 'Avg_Discount']
+    performance_data = performance_data.reset_index()
+    performance_data['Date'] = performance_data['Date'].astype(str)
+    
+    # Create performance evolution visualization
+    fig_performance = go.Figure()
+    
+    fig_performance.add_trace(go.Scatter(
+        x=performance_data['Date'],
+        y=performance_data['Avg_Rating'],
+        mode='lines+markers',
+        name='Average Rating',
+        line=dict(color='#FF3F6C', width=2),
+        marker=dict(size=8)
+    ))
+    
+    fig_performance.update_layout(
+        title="Customer Rating Evolution",
+        xaxis_title="Month",
+        yaxis_title="Average Rating",
+        template="plotly_white",
+        height=400,
+        showlegend=True
+    )
+    
+    st.plotly_chart(fig_performance, use_container_width=True)
+    
+    # Display performance metrics
+    col1, col2 = st.columns(2)
     
     with col1:
-        st.metric("Highest Average Year", 
-                 f"{yearly_avg.idxmax()}", 
-                 f"₹{yearly_avg.max():,.2f}")
+        st.markdown("""
+            ### Sales Evolution
+            - Starting Sales: ₹{:,.2f}
+            - Current Sales: ₹{:,.2f}
+            - Growth: {:.1f}%
+        """.format(
+            performance_data['Total_Sales'].iloc[0],
+            performance_data['Total_Sales'].iloc[-1],
+            ((performance_data['Total_Sales'].iloc[-1] - performance_data['Total_Sales'].iloc[0]) / 
+             performance_data['Total_Sales'].iloc[0] * 100)
+        ))
     
     with col2:
-        st.metric("Lowest Average Year", 
-                 f"{yearly_avg.idxmin()}", 
-                 f"₹{yearly_avg.min():,.2f}")
-    
-    with col3:
-        st.metric("Overall Yearly Average", 
-                 f"₹{yearly_avg.mean():,.2f}")
-
-    # Calculate year-over-year growth
-    yoy_growth = yearly_avg.pct_change() * 100
-    
-    st.markdown("### Year-over-Year Growth")
-    for year in yoy_growth.index[1:]:  # Skip first year as it has no previous year for comparison
-        growth = yoy_growth[year]
-        st.markdown(f"**{year}**: {'📈' if growth > 0 else '📉'} {growth:.1f}% from previous year")
-
+        st.markdown("""
+            ### Rating Evolution
+            - Starting Rating: {:.2f}
+            - Current Rating: {:.2f}
+            - Change: {:.2f}
+        """.format(
+            performance_data['Avg_Rating'].iloc[0],
+            performance_data['Avg_Rating'].iloc[-1],
+            performance_data['Avg_Rating'].iloc[-1] - performance_data['Avg_Rating'].iloc[0]
+        ))
 # Sales Prediction Section
 if show_predictions:
-
+    st.subheader("🔮 Sales Prediction")
     
     def prepare_sales_data(df):
         """
@@ -2029,4 +2103,4 @@ st.markdown("""
     <div style='text-align: center; color: #666; padding: 20px;'>
         Dashboard last updated: {}
     </div>
-""".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")), unsafe_allow_html=True) 
+""".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")), unsafe_allow_html=True)
